@@ -1,0 +1,45 @@
+version: '3.9'
+
+services:
+  web:
+    build: .
+    container_name: fastapi_web
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    container_name: loop_db
+    environment:
+      POSTGRES_USER: loop
+      POSTGRES_PASSWORD: loop
+      POSTGRES_DB: loop_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: redis_queue
+    ports:
+      - "6379:6379"
+
+  celery_worker:
+    build: .
+    container_name: celery_worker
+    command: ["bash", "./celery_worker.sh"]
+    depends_on:
+      - web
+      - redis
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_data:
