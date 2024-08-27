@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 psycopg2-binary
-psycopg2
+# psycopg2
 pydantic
 alembic
 pytz

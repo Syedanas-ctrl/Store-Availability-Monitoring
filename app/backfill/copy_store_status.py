@@ -1,9 +1,11 @@
 import csv
 from datetime import datetime, time
 from io import StringIO
+import uuid
 from app.business_hour.model import BusinessHour, DayOfWeek
 from app.models import Store
 from app.database import engine
+from app.store_status.enum import ActivityStatus
 from sqlalchemy.orm import Session
 import pytz
 
@@ -29,7 +31,10 @@ def backfill_store_status(csv_path: str, db: Session):
                 new_stores.add(store_id)
             
             timestamp = pytz.utc.localize(parse_timestamp(row['timestamp_utc']))
-            copy_data.append(f"{store_id}\t{row['status']}\t{timestamp}\tbackfill_script\tbackfill_script\n")
+            current_timestamp = datetime.now(pytz.utc)
+            status_id = uuid.uuid4().int & (1<<63)-1
+            #status_id, store_id, status, timestamp, created_by, created_at, updated_by, updated_at
+            copy_data.append(f"{status_id}\t{store_id}\t{ActivityStatus[row['status'].upper()].value.upper()}\t{timestamp}\tbackfill_script\t{current_timestamp}\tbackfill_script\t{current_timestamp}\n")
 
             if i % 100000 == 0:
                 print(f"Processed {i} rows...")
@@ -62,13 +67,14 @@ def backfill_store_status(csv_path: str, db: Session):
 
     print("starting bulk insert of store status data...")
     # Use COPY for bulk insert
-    with engine.raw_connection() as conn:
-        with conn.cursor() as cur:
-            cur.copy_from(
-                StringIO(''.join(copy_data)),
-                'store_status',
-                columns=('store_id', 'status', 'timestamp', 'created_by', 'updated_by')
-            )
+    conn = engine.raw_connection()
+    with conn.cursor() as cur:
+        cur.copy_from(
+            StringIO(''.join(copy_data)),
+            'store_status',
+            columns=('id', 'store_id', 'status', 'timestamp', 'created_by', 'created_at', 'updated_by', 'updated_at')
+        )
+    conn.commit()
     
     print(f"Inserted {len(copy_data)} rows of store status data")
 

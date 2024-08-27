@@ -2,11 +2,12 @@
 from celery import Celery
 from app.services import *
 from datetime import timedelta
+from app.config import Config
 
 celery = Celery(
     "worker",
-    broker="redis://redis:6379/0",
-    backend="redis://redis:6379/0",
+    broker=f"redis://{Config.REDIS_HOST}:{Config.REDIS_PORT}/{Config.REDIS_DB}",
+    backend=f"redis://{Config.REDIS_HOST}:{Config.REDIS_PORT}/{Config.REDIS_DB}",
     broker_connection_retry_on_startup=True
 )
 

@@ -57,9 +57,10 @@ def backfill_business_hours(csv_path: str, db: Session):
             if day not in days:
                 missing_business_hours += 1
 
+            #if the business hour is not set, we set it to the min and max
             start_time, end_time = days.get(day, (
-                tz.localize(datetime.combine(current_date, time.min)),
-                tz.localize(datetime.combine(current_date, time.max))
+                tz.localize(datetime.combine(current_date, time.fromisoformat('00:00:00'))),
+                tz.localize(datetime.combine(current_date, time.fromisoformat('23:59:59')))
             ))
 
             business_hour = BusinessHour(
