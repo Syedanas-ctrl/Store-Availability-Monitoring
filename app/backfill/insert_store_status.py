@@ -2,14 +2,16 @@ import csv
 from datetime import datetime, time
 from app.business_hour.model import BusinessHour, DayOfWeek
 from app.models import Store, StoreStatus
+from app.store_status.enum import ActivityStatus
 from app.database import engine
-from app.store_status.model import Status
 from sqlalchemy.orm import Session
 import pytz
 from multiprocessing import Pool, cpu_count, Manager
 
-def parse_timestamp(timestamp_str, formats):
-    for fmt in formats:
+
+#time data is in multiple formats, so we try both
+def parse_timestamp(timestamp_str):
+    for fmt in ['%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S']:
         try:
             return datetime.strptime(timestamp_str, fmt)
         except ValueError:
@@ -18,7 +20,6 @@ def parse_timestamp(timestamp_str, formats):
 def process_batch(batch, stores_dict):
     records = []
     new_stores = []
-    formats = ['%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S']
     for row in batch:
         store_id = int(row['store_id'])
         store = stores_dict.get(store_id)
@@ -27,8 +28,8 @@ def process_batch(batch, stores_dict):
 
         records.append(StoreStatus(
             store_id=store_id,
-            status=Status(row['status']),
-            timestamp=pytz.utc.localize(parse_timestamp(row['timestamp_utc'], formats)),
+            status=ActivityStatus(row['status']),
+            timestamp=pytz.utc.localize(parse_timestamp(row['timestamp_utc'])),
             created_by='backfill_script',
             updated_by='backfill_script'
         ))

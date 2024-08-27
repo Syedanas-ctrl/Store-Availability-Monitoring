@@ -7,6 +7,9 @@ def backfill_stores(csv_path: str, db: Session):
     with open(csv_path, mode='r') as file:
         total_rows = sum(1 for row in csv.DictReader(file))
 
+    batch_size = 1000
+    batch = []
+
     with open(csv_path, mode='r') as file:
         reader = csv.DictReader(file)
         for index, row in enumerate(reader, start=1):
@@ -16,15 +19,20 @@ def backfill_stores(csv_path: str, db: Session):
                 created_by='backfill_script',
                 updated_by='backfill_script'
             )
-            db.add(store)
+            batch.append(store)
             
-            # Commit every 1000 rows to avoid long-running transactions
-            if index % 1000 == 0:
+            if len(batch) == batch_size:
+                db.bulk_save_objects(batch)
                 db.commit()
+                batch.clear() 
             
             print(f"Processing store {index} of {total_rows} ({index/total_rows:.2%})", end='\r')
 
-    db.commit()
+    # Insert any remaining records
+    if batch:
+        db.bulk_save_objects(batch)
+        db.commit()
+    
     print(f"\nCompleted processing {total_rows} stores.")
 
 if __name__ == '__main__':

@@ -11,6 +11,7 @@ class StoreStatus(BaseAudit):
     status = Column(Enum(ActivityStatus))
     store = relationship('Store', back_populates='status_reports')
 
+    #I think its a good idea to only index this for a week. based on business requirements
     __table_args__ = (
         Index('ix_store_status_store_id_timestamp', 'store_id', 'timestamp'),
     )
