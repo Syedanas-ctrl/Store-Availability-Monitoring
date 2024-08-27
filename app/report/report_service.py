@@ -4,6 +4,7 @@ from app.business_hour.service import BusinessHourService
 from app.crud import BaseCRUDService
 from app.report.enum import ReportStatus
 from app.store_status.enum import ActivityStatus
+from app.store_status.redis import redis_cache
 from .report_item_service import ReportItemService
 from app.store.service import StoreService
 from app.store_status.service import StoreStatusService
@@ -15,6 +16,8 @@ import pytz
 import csv
 import io
 from fastapi.responses import StreamingResponse
+from redis import Redis
+from app.config import Config
 
 class ReportService(BaseCRUDService[Report]):
     def __init__(self, store_service: StoreService, status_service: StoreStatusService, business_hour_service: BusinessHourService, report_item_service: ReportItemService):
@@ -23,6 +26,11 @@ class ReportService(BaseCRUDService[Report]):
         self.status_service = status_service
         self.business_hour_service = business_hour_service
         self.report_item_service = report_item_service
+        self.redis_client = Redis(host=Config.REDIS_HOST, port=Config.REDIS_PORT, db=Config.REDIS_DB)
+
+    @redis_cache
+    def _get_all_stores(self, db: Session):
+        return self.store_service.findAllBy(db, limit=20000)
 
     def _calculate_uptime_downtime(self, business_hours, store_statuses, start_date: datetime, end_date: datetime) -> Tuple[int, int, int]:
         total_uptime, total_downtime, expected_uptime = 0, 0, 0
@@ -69,7 +77,7 @@ class ReportService(BaseCRUDService[Report]):
 
     def generate_report(self, report_id: int) -> None:
         with Session(engine) as db:
-            stores = self.store_service.findAllBy(db, limit=20000)
+            stores = self._get_all_stores(db)
             self._process_stores_in_batches(db, stores, report_id)
             self.mark_report_as_ready(report_id)
            

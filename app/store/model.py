@@ -10,7 +10,7 @@ class Store(BaseAudit):
     timezone = Column(String, default='America/Chicago')
     status_reports = relationship('StoreStatus', back_populates='store')
     business_hours = relationship('BusinessHour', back_populates='store')
-    reports = relationship('Report', back_populates='store')
+    report_items = relationship('ReportItem', back_populates='store')
 
     __table_args__ = (
         Index('ix_stores_id', 'id'),
