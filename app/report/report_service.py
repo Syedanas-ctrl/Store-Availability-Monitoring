@@ -4,7 +4,7 @@ from app.business_hour.service import BusinessHourService
 from app.crud import BaseCRUDService
 from app.report.enum import ReportStatus
 from app.store_status.enum import ActivityStatus
-from app.store_status.redis import redis_cache
+from app.redis import redis_cache
 from .report_item_service import ReportItemService
 from app.store.service import StoreService
 from app.store_status.service import StoreStatusService
@@ -28,19 +28,19 @@ class ReportService(BaseCRUDService[Report]):
         self.report_item_service = report_item_service
         self.redis_client = Redis(host=Config.REDIS_HOST, port=Config.REDIS_PORT, db=Config.REDIS_DB)
 
-    @redis_cache
-    def _get_all_stores(self, db: Session):
-        return self.store_service.findAllBy(db, limit=20000)
-
     def _calculate_uptime_downtime(self, business_hours, store_statuses, start_date: datetime, end_date: datetime) -> Tuple[int, int, int]:
         total_uptime, total_downtime, expected_uptime = 0, 0, 0
         current_date = start_date.date()
 
+        #Iterate through each day in the date range
         while current_date <= end_date.date():
             day_of_week = current_date.weekday()
+
+            #Filter business hours for the current day of the week
             day_business_hours = [
                 bh for bh in business_hours if bh.day_of_week.value == day_of_week]
 
+            #Iterate through each business hour in the day
             for bh in day_business_hours:
                 start_datetime = max(datetime.combine(current_date, bh.start_time), start_date)
                 end_datetime = min(datetime.combine(current_date, bh.end_time), end_date)
@@ -48,19 +48,26 @@ class ReportService(BaseCRUDService[Report]):
                 if end_datetime <= start_datetime:
                     continue
 
+                #Calculate the duration of the business hour period
                 period_duration = (end_datetime - start_datetime).total_seconds() / 60
                 expected_uptime += period_duration
 
+                #Filter store statuses for the current business hour period
                 period_status_reports = [sr for sr in store_statuses if start_datetime <= sr.timestamp <= end_datetime]
 
+                #If there are no store statuses for the current business hour period, add the duration to downtime
                 if not period_status_reports:
                     total_downtime += period_duration
                     continue
 
-                last_check_time,last_status = start_datetime, False
+                #Initialize the last check time and status
+                #Assume the first store status is inactive
+                last_check_time, last_status = start_datetime, False
 
+                #Iterate through each store status in the current business hour period
                 for sr in period_status_reports:
                     duration = (sr.timestamp - last_check_time).total_seconds() / 60
+                    #if the last status is active, add the duration to uptime, otherwise add it to downtime
                     total_uptime += duration if last_status else 0
                     total_downtime += duration if not last_status else 0
 
@@ -68,6 +75,7 @@ class ReportService(BaseCRUDService[Report]):
                     last_status = (sr.status == ActivityStatus.ACTIVE)
 
                 final_duration = (end_datetime - last_check_time).total_seconds() / 60
+                #if the last status is active, add the duration to uptime, otherwise add it to downtime
                 total_uptime += final_duration if last_status else 0
                 total_downtime += final_duration if not last_status else 0
 
@@ -77,7 +85,7 @@ class ReportService(BaseCRUDService[Report]):
 
     def generate_report(self, report_id: int) -> None:
         with Session(engine) as db:
-            stores = self._get_all_stores(db)
+            stores = self.store_service.findAllBy(db, limit=20000)
             self._process_stores_in_batches(db, stores, report_id)
             self.mark_report_as_ready(report_id)
            
@@ -95,14 +103,15 @@ class ReportService(BaseCRUDService[Report]):
             self.report_item_service.createMultiple(db, objs_in=report_items)
 
     def _generate_store_report(self, db: Session, store, report_id: int) -> dict:
+        #adjust current time as per the requirement
         current_time = datetime.strptime("2023-01-19 08:03:07.391994", "%Y-%m-%d %H:%M:%S.%f").astimezone(pytz.UTC)
         one_hour_ago = current_time - timedelta(hours=1)
         one_day_ago = current_time - timedelta(days=1)
         one_week_ago = current_time - timedelta(weeks=1)
 
-        business_hours = self.business_hour_service.findAllBy(db, store_id=store.id)
+        business_hours = self.business_hour_service.findAllBy(db, limit=10000, store_id=store.id)
 
-        store_statuses = self.status_service.findAllByAttributes(db, limit=1000, store_id=store.id, timestamp={'$gte': one_week_ago})
+        store_statuses = self.status_service.findAllByAttributes(db, limit=10000, store_id=store.id, timestamp={'$gte': one_week_ago})
         store_statuses.sort(key=lambda x: x.timestamp)
 
         store_statuses_last_hour = [sr for sr in store_statuses if one_hour_ago <= sr.timestamp <= current_time]
@@ -150,6 +159,8 @@ class ReportService(BaseCRUDService[Report]):
             report = self.findOneById(db, report_id)
             if report is None:
                 raise HTTPException(status_code=404, detail="Report not found")
+            if report.status == ReportStatus.FAILED:
+                return "Failed"
             if report.status != ReportStatus.READY:
                 return "Running"
             
