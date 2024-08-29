@@ -1,4 +1,4 @@
-from http.client import HTTPException
+from fastapi import HTTPException
 from typing import List, Tuple
 from app.business_hour.service import BusinessHourService
 from app.crud import BaseCRUDService
@@ -31,6 +31,7 @@ class ReportService(BaseCRUDService[Report]):
     def _calculate_uptime_downtime(self, business_hours, store_statuses, start_date: datetime, end_date: datetime) -> Tuple[int, int, int]:
         total_uptime, total_downtime, expected_uptime = 0, 0, 0
         current_date = start_date.date()
+        total_duration = (end_date - start_date).total_seconds() / 60
 
         #Iterate through each day in the date range
         while current_date <= end_date.date():
@@ -44,12 +45,13 @@ class ReportService(BaseCRUDService[Report]):
             for bh in day_business_hours:
                 start_datetime = max(datetime.combine(current_date, bh.start_time), start_date)
                 end_datetime = min(datetime.combine(current_date, bh.end_time), end_date)
-
+                
                 if end_datetime <= start_datetime:
-                    continue
+                    #add a day to end_datetime
+                    end_datetime += timedelta(days=1)
 
                 #Calculate the duration of the business hour period
-                period_duration = (end_datetime - start_datetime).total_seconds() / 60
+                period_duration = min((end_datetime - start_datetime).total_seconds() / 60, total_duration - expected_uptime)
                 expected_uptime += period_duration
 
                 #Filter store statuses for the current business hour period
