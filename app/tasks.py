@@ -11,7 +11,7 @@ celery = Celery(
     broker_connection_retry_on_startup=True
 )
 
-@celery.task
+@celery.task(name='tasks.poll_store_status')
 def poll_store_status():
     store_service.log_store_statuses()
 
