@@ -1,4 +1,21 @@
-# Welcome to Loop - Store Monitoring
+# Store Availability Monitoring
+
+An application to check availability of a store(online or not). All stores are supposed to be online during their business hours. Due to some unknown reasons, a store might go inactive for a few hours. Owners want to get a report of the how often this happened in the past.   
+
+## Data sources
+
+We will have 3 sources of data 
+
+1. data about whether the store was active or not in a CSV.  The CSV has 3 columns (`store_id, timestamp_utc, status`) where status is active or inactive.  All timestamps are in **UTC**
+    1. Data can be found in CSV format <>
+2. We have the business hours of all the stores - schema of this data is `store_id, dayOfWeek(0=Monday, 6=Sunday), start_time_local, end_time_local`
+    1. These times are in the **local time zone**
+    2. If data is missing for a store, assume it is open 24*7
+    3. Data can be found in CSV format <>
+3. Timezone for the stores - schema is `store_id, timezone_str` 
+    1. If data is missing for a store, assume it is America/Chicago
+    2. This is used so that data sources 1 and 2 can be compared against each other. 
+    3. Data can be found in CSV format <>
 
 This is build on -
 FastAPI
